@@ -11,6 +11,8 @@ import Foundation
 import AppKit
 #elseif os(iOS)
 import UIKit
+#elseif os(visionOS)
+import CoreGraphics
 #endif
 
 #if os(macOS)
@@ -49,7 +51,6 @@ public extension NSImage {
     }
 }
 #endif
-
 
 extension CGBitmapInfo {
     public static var byteOrder16Host: CGBitmapInfo {

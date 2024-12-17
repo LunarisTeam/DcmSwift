@@ -7,17 +7,19 @@
 //
 
 import Foundation
-import Quartz
-
-
 
 #if os(macOS)
 import AppKit
+import Quartz
 #elseif os(iOS)
 import UIKit
+import Quartz
+#elseif os(visionOS)
+import SwiftUI
+import CoreGraphics
 #endif
 
-
+#if os(macOS) || os(iOS)
 extension NSImage {
     var png: Data? { tiffRepresentation?.bitmap?.png }
 }
@@ -27,6 +29,23 @@ extension NSBitmapImageRep {
 extension Data {
     var bitmap: NSBitmapImageRep? { NSBitmapImageRep(data: self) }
 }
+#elseif os(visionOS)
+extension UIImage {
+    /// Converts `UIImage` to PNG data.
+    var png: Data? {
+        return self.pngData()
+    }
+}
+
+extension Data {
+    /// Converts `Data` into a `CGImage`.
+    var cgImage: CGImage? {
+        let dataProvider = CGDataProvider(data: self as CFData)
+        return dataProvider.flatMap { CGImage(pngDataProviderSource: $0, decode: nil, shouldInterpolate: true, intent: .defaultIntent) }
+    }
+}
+#endif
+
 /**
  DicomImage is a wrapper that provides images related features for the DICOM standard.
  Please refer to dicomiseasy : http://dicomiseasy.blogspot.com/2012/08/chapter-12-pixel-data.html
@@ -204,7 +223,7 @@ public class DicomImage {
         return nil
     }
     
-#elseif os(iOS)
+#elseif os(iOS) || os(visionOS)
     /**
      Creates an `UIImage` for a given frame
      - Important: only for `iOS`
@@ -212,11 +231,22 @@ public class DicomImage {
     public func image(forFrame frame: Int) -> UIImage? {
         if !frames.indices.contains(frame) { return nil }
 
+        
+        #if os(visionOS)
+        let size = CGSize(width: self.columns, height: self.rows)
+        #else
         let size = NSSize(width: self.columns, height: self.rows)
+        #endif
+        
         let data = self.frames[frame]
 
         if let cgim = self.imageFromPixels(size: size, pixels: data.toUnsigned8Array(), width: self.columns, height: self.rows) {
+            
+            #if os(visionOS)
+            return UIImage(cgImage: cgim)
+            #else
             return UIImage(cgImage: cgim, size: size)
+            #endif
         }
 
         return nil
@@ -229,7 +259,13 @@ public class DicomImage {
     
     // MARK: - Private
     
+    #if !os(visionOS)
     private func imageFromPixels(size: NSSize, pixels: UnsafeRawPointer, width: Int, height: Int) -> CGImage? {
+        return imageFromPixels(size: size, pixels: pixels, width: width, height: height)
+    }
+    #endif
+    
+    private func imageFromPixels(size: CGSize, pixels: UnsafeRawPointer, width: Int, height: Int) -> CGImage? {
         var bitmapInfo:CGBitmapInfo = []
         //var __:UnsafeRawPointer = pixels
         
@@ -354,7 +390,9 @@ public class DicomImage {
                 url.appendPathComponent(baseFilename + String(frame) + ".png")
                 Logger.debug(url.absoluteString)
                 
+                #if !os(visionOS)
                 image.setName(url.absoluteString)
+                #endif
                 
                 // image() gives different class following the OS
                 #if os(macOS)
